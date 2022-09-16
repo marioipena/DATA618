@@ -1,1 +1,1 @@
-# DATA618
+# DATA618 Quantitative Finance
