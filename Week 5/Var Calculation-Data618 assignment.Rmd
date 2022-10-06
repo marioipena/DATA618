@@ -1,0 +1,303 @@
+---
+title: "CUNY MSDS DATA618 - Quantative Finance"
+author: 'Team : Omega (Mario Pena, Deepak Sharma, Ramnivas Singh)'
+date: "9/28/2022"
+output:
+  html_document: default
+  pdf_document: default
+subtitle: 'Week 5: Value at Risk Calculation'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## About
+This worksheet looks at VaR calculations for the two cases of single and multiple equity asset. We will also demonstrate VaR calculations for a fixed income investment. 
+
+## Task 1: VaR Calculations: Single Equity Asset
+
+Consider the time series of a stock of your choice (we looked at Fedex stock)  and for the time-period from Jan 1, 2018 to present.
+
+We will first generate the historical time series of daily log returns, and calculate the mean and standard deviation of the time series.
+
+Calculate the historical daily log returns, mean and standard deviation
+
+```{r}
+#Install package quantmod 
+#install.packages("quantmod")
+library("quantmod")
+getSymbols("FDX", from = "2015-01-01", to = Sys.Date())
+
+price = FDX$FDX.Adjusted
+price = as.numeric(price)
+ret = diff(log(price))
+mu = mean(ret)
+sigma = sd(ret)
+
+sprintf("Mean is: %f", mu )
+sprintf("standard deviation is: %f",sigma)
+```
+
+Given a time series we can generate a histogram and mark the quantile value that corresponds to the 95% confidence level. The quantile value in this case is the critical value for which 95% of the data is on the right (higher) of the critical value as represented by the histogram. The remaining 5% will be on the left. To find the quantile value you will need to use the function quantile() with the proper arguments. For example quantile(xts,probs=0.01) applies to a time series xts and return the critical value correspondng to 99% confidence level.
+
+```{r}
+hist(ret, main = "Historical FDX Log Returns", breaks = 50)
+q = quantile(ret, probs = 0.05)
+abline(v = q, col = "blue")
+```
+
+Given the above, we can calculate a VaR value for a given investment and time horizon.
+Assume $2000 investment in the stock, calculate the 95% VaR for a 5 day time horizon.
+
+As calculated we get VaR(with log return) for a 5 day time horizon and 2,000USD investment = ~59.227379USD. In practical terms, this means there is a 5% chance of losing at least ~59.227379USD over a 5 day time horizon.
+
+```{r}
+T = 5
+alpha = 0.05
+V = 2000
+VaR = V * (exp(quantile(ret, probs = 0.05))-1)
+ 
+sprintf("VaR(value at risk ) is: %f", VaR )
+```
+
+How does the  VaR calculation change if we assume simple returns instead of the log returns?
+
+VaR(with Simple return) for a 5 day time horizon and 2,000USD investment = ~59.360998USD. In practical terms, this means there is a 5% chance of losing at least ~59.360998USD over a 5 day time horizon.
+
+```{r}
+ret2 = periodReturn(FDX, period = "daily", type = "arithmetic")
+mu2 = mean(ret2)
+sigma2 = sd(ret2)
+
+hist(ret2, main = "FDX Simple Returns", breaks = 50)
+q = quantile(ret2, probs = 0.05)
+abline(v=q, col = "red")
+
+T = 5
+alpha = 0.05
+V = 2000
+VarSim = V*quantile(ret2, probs=0.05)
+VarSim
+sprintf("Var(value at risk ) with simple returns is: %f", VarSim )
+```
+
+Since log returns are continuously compounded returns, it is normal to see that the log returns VaR are lower than simple returns.
+
+
+## Task 2: VaR Calculations: Multiple Equity Portfolio VaR Test
+
+In this section we will consider the equity stocks we chose for our group portfolio. The portfolio includes the following stocks: PFE, JNJ, MRNA, META, COST, WMT, KR, BAC and HSBC for the time-period from Jan 1,2018 to present. The total cash amount invested in these assets is $62,499,375 with different allocations distributed among all nine stocks.
+
+To calculate the portfolio VaR we will follow the methodolgy described by the variance-covariance method. First the covariance matrix needs to be computed. We then calculate the variance or volatility of the portolio as expressed in the varaince-covariance method taking into account the weights associated with each asset in the portfolio. Finally we compute the mean or expected return of the portfolio also taking into account the weights. Given the expected return and volatility we should be able to compute the VaR of the portfolio. The assumption is we have a normal distribution of log returns.
+
+First we calculate the overall portfolio VaR.
+
+Calculate the portfolio 99% VaR for 3 day, and 5 days for the invested amount.
+
+```{r}
+symbols = c("PFE", "JNJ", "MRNA", "META", "COST", "WMT", "KR", "BAC", "HSBC")
+getSymbols(symbols, src = "yahoo", from = "2018-01-01", to = Sys.Date())
+
+PfeRd = as.numeric(periodReturn(PFE$PFE.Adjusted, period ="daily", type = "log"))
+JnjRd = as.numeric(periodReturn(JNJ$JNJ.Adjusted, period ="daily", type = "log"))
+MrnaRd = as.numeric(periodReturn(MRNA$MRNA.Adjusted, period ="daily", type = "log"))
+MetaRd = as.numeric(periodReturn(META$META.Adjusted, period ="daily", type = "log"))
+CostRd = as.numeric(periodReturn(COST$COST.Adjusted, period ="daily", type = "log"))
+WmtRd = as.numeric(periodReturn(WMT$WMT.Adjusted, period ="daily", type = "log"))
+KrRd = as.numeric(periodReturn(KR$KR.Adjusted, period ="daily", type = "log"))
+BacRd = as.numeric(periodReturn(BAC$BAC.Adjusted, period ="daily", type = "log"))
+HsbcRd = as.numeric(periodReturn(HSBC$HSBC.Adjusted, period ="daily", type = "log"))
+
+m = cbind(PfeRd, JnjRd, MrnaRd, MetaRd, CostRd, WmtRd, KrRd, BacRd, HsbcRd)
+cor(m)
+
+w = c(0.05, 0.42, 0.07, 0.02,	0.04,	0.18,	0.08,	0.08, 0.06)
+
+var_p = t(w) %*% cov(m) %*% w
+
+mu_p = colMeans(m) %*% w 
+
+
+
+T = 3
+alpha = 0.01 
+V = 62499375
+Var3 = V*(exp(qnorm(alpha, mean = T*mu_p, sd= sqrt(T*var_p)))-1)
+sprintf("Portfolio Var for 3 days is %f",Var3)
+
+T = 5
+alpha = 0.01 
+V = 62499375
+Var5 = V*(exp(qnorm(alpha, mean = T*mu_p, sd= sqrt(T*var_p)))-1)
+sprintf("Portfolio Var for 5 days is %f",Var5)
+```
+
+## Calculate the nine-individual asset 99% VaR for 3 days.
+
+
+```{r}
+muPfe = mean(PfeRd)
+sigmaPfe = sd(PfeRd)
+
+T = 3
+alpha = 0.01
+V = 62499375 * 0.05
+VaRPfe = V*(exp(qnorm(alpha, mean=T*muPfe, sd=sqrt(T)*sigmaPfe))-1)
+sprintf("individual PFE Var for 3 days is %f",VaRPfe)
+
+
+muJnj = mean(JnjRd)
+sigmaJnj = sd(JnjRd)
+
+T = 3
+alpha = 0.01
+V = 62499375 * 0.42
+VaRJnj = V*(exp(qnorm(alpha, mean=T*muJnj, sd=sqrt(T)*sigmaJnj))-1)
+sprintf("individual JNJ Var for 3 days is %f",VaRJnj)
+
+muMrna = mean(MrnaRd)
+sigmaMrna = sd(MrnaRd)
+
+T = 3
+alpha = 0.01
+V = 62499375 * 0.07
+VaRMrna = V*(exp(qnorm(alpha, mean=T*muMrna, sd=sqrt(T)*sigmaMrna))-1)
+sprintf("individual MRNA Var for 3 days is %f",VaRMrna)
+
+muMeta = mean(MetaRd)
+sigmaMeta = sd(MetaRd)
+
+T = 3
+alpha = 0.01
+V = 62499375 * 0.02
+VaRMeta = V*(exp(qnorm(alpha, mean=T*muMeta, sd=sqrt(T)*sigmaMeta))-1)
+sprintf("individual META Var for 3 days is %f",VaRMeta)
+
+muCost = mean(CostRd)
+sigmaCost = sd(CostRd)
+
+T = 3
+alpha = 0.01
+V = 62499375 * 0.04
+VaRCost = V*(exp(qnorm(alpha, mean=T*muCost, sd=sqrt(T)*sigmaCost))-1)
+sprintf("individual COST Var for 3 days is %f",VaRCost)
+
+muWmt = mean(WmtRd)
+sigmaWmt = sd(WmtRd)
+
+T = 3
+alpha = 0.01
+V = 62499375 * 0.18
+VaRWmt = V*(exp(qnorm(alpha, mean=T*muWmt, sd=sqrt(T)*sigmaWmt))-1)
+sprintf("individual WMT Var for 3 days is %f",VaRWmt)
+
+muKr = mean(KrRd)
+sigmaKr = sd(KrRd)
+
+T = 3
+alpha = 0.01
+V = 62499375 * 0.08
+VaRKr = V*(exp(qnorm(alpha, mean=T*muKr, sd=sqrt(T)*sigmaKr))-1)
+sprintf("individual KR Var for 3 days is %f",VaRKr)
+
+muBac = mean(BacRd)
+sigmaBac = sd(BacRd)
+
+T = 3
+alpha = 0.01
+V = 62499375 * 0.08
+VaRBac = V*(exp(qnorm(alpha, mean=T*muBac, sd=sqrt(T)*sigmaBac))-1)
+sprintf("individual BAC Var for 3 days is %f",VaRBac)
+
+muHsbc = mean(HsbcRd)
+sigmaHsbc = sd(HsbcRd)
+
+T = 3
+alpha = 0.01
+V = 62499375 * 0.06
+VaRHsbc = V*(exp(qnorm(alpha, mean=T*muHsbc, sd=sqrt(T)*sigmaHsbc))-1)
+sprintf("individual HSBC Var for 3 days is %f",VaRHsbc)
+
+
+
+totalIndVar = VaRPfe + VaRJnj + VaRMrna + VaRMeta + VaRCost + VaRWmt + VaRKr + VaRBac + VaRHsbc
+sprintf("sum of individual investments VaR for 3 days is %f",totalIndVar)
+sprintf("Overall Portfolio VaR for 3 days is %f",Var3)
+```
+
+Based on the results we can see that the significant reduction in VaR for the overall portfolio relative to the sum of the individual assets' VaR is due to the benefit of portfolio diversification.
+
+## Task 3: VaR Calculations: Fixed Income Investment
+
+Our group also considered keeping risk low- and consistent-income earnings via dividends and coupons. About 49% of our investments went into Fixed Income Funds. 
+
+Calculating the VaR for fixed income investment will be done on a fund by fund basis, as our portfolio includes a combination of US Investment Grade Fixed Income, US Equities and EM Government Bonds ETFs. 
+
+We'll start with the calculation of VaR for the US Equities, which include S&P 500 ETF and Nasdaq 100 ETF.
+
+```{r}
+getSymbols("QQQ", from = "2015-01-01", to = Sys.Date())
+getSymbols("SPY", from = "2015-01-01", to = Sys.Date())
+
+QqqRd = as.numeric(periodReturn(QQQ$QQQ.Adjusted, period ="daily", type = "log"))
+SpyRd = as.numeric(periodReturn(SPY$SPY.Adjusted, period ="daily", type = "log"))
+
+m2 = cbind(QqqRd, SpyRd)
+cor(m2)
+
+w2 = c(0.5, 0.5)
+
+var_p2 = t(w2) %*% cov(m2) %*% w2
+
+mu_p2 = colMeans(m2) %*% w2 
+
+
+
+T = 1
+alpha = 0.01 
+V = 30625000
+Var1 = V*(exp(qnorm(alpha, mean = T*mu_p2, sd= sqrt(T*var_p2)))-1)
+sprintf("Portfolio VaR for 1 day is %f",Var1)
+```
+
+
+Now we'll continue by calculating the VaR for US Investment Grade Fixed Income, which include AGG (Core US Aggregate Bond ETF)
+
+```{r}
+getSymbols("AGG", from = "2015-01-01", to = Sys.Date())
+
+AggRd = as.numeric(periodReturn(AGG$AGG.Adjusted, period ="daily", type = "log"))
+
+muAgg = mean(AggRd)
+sigmaAgg = sd(AggRd)
+
+T = 1
+alpha = 0.01 
+V = 18375000
+VaRAgg = V*(exp(qnorm(alpha, mean=T*muAgg, sd=sqrt(T)*sigmaAgg))-1)
+sprintf("individual AGG Var for 1 day is %f",VaRAgg)
+```
+
+Lastly, we will calculate the VaR for EM Government Bonds, which include EMB (USD Emerging Markets Bond ETF)
+
+```{r}
+getSymbols("EMB", from = "2015-01-01", to = Sys.Date())
+
+EmbRd = as.numeric(periodReturn(EMB$EMB.Adjusted, period ="daily", type = "log"))
+
+muEmb = mean(EmbRd)
+sigmaEmb = sd(EmbRd)
+
+T = 1
+alpha = 0.01 
+V = 12250000
+VaREmb = V*(exp(qnorm(alpha, mean=T*muEmb, sd=sqrt(T)*sigmaEmb))-1)
+sprintf("individual EMB Var for 1 day is %f",VaREmb)
+```
+
+
+## Conclusion
+
+Based on the results we can see that the significant reduction in VaR for the overall portfolio relative to the sum of the individual assets' VaR is due to the benefit of portfolio diversification.
+
